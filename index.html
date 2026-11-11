@@ -70,22 +70,22 @@
     place-items: center;
     pointer-events: none;
   }
-  .logo {
-    display: block;
-    width: min(39vw,480px);
-    max-height: 48svh;
-    height: auto;
-    object-fit: contain;
-    opacity: 0;
-    filter: drop-shadow(0 5px 34px #000b);
-    animation: logo-in 3s ease .6s forwards;
-  }
-  @keyframes logo-in {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-      filter: blur(9px);
-    }
+
+.logo {
+  display: block;
+  width: min(39vw, 480px);
+  max-height: 48svh;
+  height: auto;
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 5px 34px #000b);
+  animation: logo-in 5s ease-in-out 0.2s both;
+}
+
+@keyframes logo-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
     to {
       opacity: 1;
       transform: translateY(0);
