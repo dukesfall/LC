@@ -1,0 +1,285 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08090b">
+  <meta name="description" content="The Lunar Corporation. Engineering a future beyond Earth.">
+  <title>Lunar Corporation</title>
+  <style>
+    :root { color-scheme: dark; --black:#08090b; --white:#eeeae3; }
+    *,*::before,*::after { box-sizing: border-box; }
+    html, body { margin:0; width:100%; min-height:100%; background:var(--black); }
+    body { font-family: Arial, Helvetica, sans-serif; color:var(--white); overflow:hidden; }
+    .site { position:relative; isolation:isolate; width:100%; min-height:100vh; min-height:100svh; overflow:hidden;
+      background: radial-gradient(ellipse 85% 80% at 50% 47%, #141619 0%, #0b0c0f 57%, #07080a 100%); }
+    .lunar-glow { pointer-events:none; position:absolute; z-index:0; inset:-25%;
+      background:radial-gradient(circle at 50% 49%, rgba(113,120,133,.075),transparent 51%); }
+    .fallback-moon { position:absolute; z-index:0; width:130vh; width:130svh; aspect-ratio:1; left:50%; top:50%;
+      transform:translate(-50%,-50%); border-radius:50%; opacity:.9;
+      background:radial-gradient(circle at 34% 29%, #55585e 0%, #34363c 30%,#26282d 57%,#121318 83%,#0b0c10 100%);
+      box-shadow: inset -10vw -9vw 15vw rgba(0,0,0,.35), 0 0 90px rgba(140,144,154,.055); }
+    canvas#moon { position:absolute; z-index:1; display:block; inset:0; width:100%; height:100%; pointer-events:none; }
+    .film { position:absolute; z-index:2; inset:0; pointer-events:none;
+      background:radial-gradient(ellipse 90% 90% at 50% 50%, transparent 44%,rgba(6,7,9,.20) 85%,rgba(6,7,9,.59) 120%);
+    }
+    .film:after { content:""; position:absolute; inset:0; opacity:.12;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E"); }
+    .brand { position:absolute; z-index:4; inset:0; display:grid; place-items:center; pointer-events:none; }
+    .brand-inner { width:clamp(270px,37vw,490px); transform:translateY(-1vh); opacity:0;
+      animation:brand-reveal 2.9s cubic-bezier(.18,.8,.28,1) .55s forwards; }
+    .brand-graphic { display:block; width:100%; height:auto; max-height:50svh; object-fit:contain; filter:drop-shadow(0 3px 36px rgba(0,0,0,.7)); }
+    @keyframes brand-reveal { 0%{opacity:0;filter:blur(10px);transform:translateY(13px)} 100%{opacity:1;filter:blur(0);transform:translateY(-1vh)} }
+    .footer { position:absolute; z-index:5; bottom:max(25px,env(safe-area-inset-bottom,0px) + 18px); inset-inline:12px;
+      text-align:center; color:rgba(238,234,227,.68); font-size:10px; font-weight:500; letter-spacing:.22em;
+      line-height:1.65; text-transform:uppercase; white-space:normal;
+      opacity:0; animation:footer-show 1.5s ease 1.9s forwards; text-shadow:0 1px 10px rgba(0,0,0,.55); }
+    @keyframes footer-show {to{opacity:1}}
+    @media(max-width:650px) {
+      .brand-inner { width:clamp(260px,73vw,350px); }
+      .fallback-moon { width:138svh; }
+      .footer { font-size:9px; letter-spacing:.13em; bottom:max(22px, env(safe-area-inset-bottom, 0px) + 16px); }
+    }
+    @media(prefers-reduced-motion:reduce) {
+      .brand-inner,.footer {animation:none;opacity:1;filter:none;transform:none;}
+    }
+  </style>
+</head>
+<body>
+  <main class="site" aria-label="The Lunar Corporation landing page">
+    <div class="lunar-glow" aria-hidden="true"></div>
+    <div class="fallback-moon" aria-hidden="true"></div>
+    <canvas id="moon" aria-hidden="true"></canvas>
+    <div class="film" aria-hidden="true"></div>
+    <div class="brand">
+      <div class="brand-inner">
+        <img class="brand-graphic" src="lclogo.png" alt="The Lunar Corporation logo" decoding="async">
+      </div>
+    </div>
+    <footer class="footer">© 2026 THE LUNAR CORPORATION. ALL RIGHTS RESERVED.</footer>
+  </main>
+  <script>
+  (() => {
+    'use strict';
+    const canvas = document.querySelector('#moon');
+    const gl = canvas.getContext('webgl', {antialias:false, alpha:true, premultipliedAlpha:false, powerPreference:'high-performance'});
+    let program;
+    if (gl) {
+    const vert = `attribute vec2 aPosition; varying vec2 vUv;
+    void main(){vUv=(aPosition+1.0)*0.5;gl_Position=vec4(aPosition,0.0,1.0);}`;
+    const frag = `precision highp float;
+    varying vec2 vUv;
+    uniform vec2 uResolution;
+    uniform float uTime;
+    uniform sampler2D uMap;
+    const float PI = 3.14159265359;
+    void main() {
+      float rad = uResolution.y * 0.645;
+      vec2 p = (gl_FragCoord.xy - vec2(uResolution.x*0.5, uResolution.y*0.50))/rad;
+      float rr = dot(p,p);
+      if (rr >= 1.0) discard;
+      vec3 n = vec3(p.x, p.y, sqrt(max(0.0, 1.0-rr)));
+      float angle = 0.35 + uTime * 0.0165;
+      vec3 q = vec3(n.x*cos(angle) + n.z*sin(angle), n.y,
+                    n.z*cos(angle) - n.x*sin(angle));
+      float lon = atan(q.x,q.z);
+      float lat = asin(clamp(q.y,-1.0,1.0));
+      vec2 uv = vec2(fract(0.5+lon/(2.0*PI)), clamp(0.5-lat/PI,0.001,0.999));
+      vec4 tex = texture2D(uMap,uv);
+      float eX = 1.0/1024.0;
+      float eY = 1.0/512.0;
+      float hX = texture2D(uMap, uv+vec2(eX,0.0)).a - texture2D(uMap, uv-vec2(eX,0.0)).a;
+      float hY = texture2D(uMap, uv+vec2(0.0,eY)).a - texture2D(uMap, uv-vec2(0.0,eY)).a;
+      vec3 east = normalize(vec3(n.z,0.0,-n.x));
+      vec3 north = normalize(cross(n,east));
+      vec3 normal = normalize(n + east*hX*2.7 - north*hY*2.7);
+      vec3 light = normalize(vec3(-0.50,0.46,1.03));
+      float diff = max(dot(normal,light),0.0);
+      float hemi = smoothstep(-0.7,0.8,n.y);
+      float illumination = 0.19 + 0.74 * pow(diff,0.9) + 0.025*hemi;
+      float grazing = pow(1.0-max(dot(normal,vec3(0.0,0.0,1.0)),0.0),3.0);
+      float specular = pow(max(dot(reflect(-light,normal),vec3(0.0,0.0,1.0)),0.0),34.0)*0.075;
+      vec3 base = tex.rgb;
+      vec3 col = base*illumination + vec3(specular) + vec3(0.028,0.033,0.042)*grazing;
+      col = mix(col, col*vec3(0.92,0.94,1.0),0.24);
+      float edgeAA = 1.35/rad;
+      float opacity = 1.0 - smoothstep(1.0-edgeAA,1.0,sqrt(rr));
+      gl_FragColor=vec4(col,opacity);
+    }`;
+    const makeShader=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};
+    try {
+      program=gl.createProgram(); gl.attachShader(program,makeShader(gl.VERTEX_SHADER,vert)); gl.attachShader(program,makeShader(gl.FRAGMENT_SHADER,frag));gl.linkProgram(program);
+      if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
+    } catch(e) {console.warn('Moon renderer unavailable',e); return;}
+    gl.useProgram(program);
+    const positions=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,positions);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+    const attrib=gl.getAttribLocation(program,'aPosition');gl.enableVertexAttribArray(attrib);gl.vertexAttribPointer(attrib,2,gl.FLOAT,false,0,0);
+    }
+
+    // Seeded, local texture synthesis. No external assets, fonts or libraries required.
+    const W=1024,H=512,N=W*H;
+    let seed=13894;
+    function rand(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
+    const height=new Float32Array(N), tone=new Float32Array(N);
+    function noiseLayer(gw,gh,amp){
+      let grid=new Float32Array((gw+1)*(gh+1));
+      for(let y=0;y<=gh;y++)for(let x=0;x<gw;x++)grid[y*(gw+1)+x]=rand();
+      for(let y=0;y<=gh;y++)grid[y*(gw+1)+gw]=grid[y*(gw+1)];
+      for(let y=0;y<H;y++){
+        const gy=y*gh/H, yi=Math.floor(gy), yf=gy-yi, sy=yf*yf*(3-2*yf);
+        const top=yi*(gw+1), bottom=Math.min(yi+1,gh)*(gw+1);
+        for(let x=0;x<W;x++){
+          const gx=x*gw/W, xi=Math.floor(gx), xf=gx-xi, sx=xf*xf*(3-2*xf), i=y*W+x;
+          const a=grid[top+xi]*(1-sx)+grid[top+xi+1]*sx;
+          const b=grid[bottom+xi]*(1-sx)+grid[bottom+xi+1]*sx;
+          height[i]+=(a*(1-sy)+b*sy-.5)*amp;
+        }
+      }
+    }
+    noiseLayer(6,3,.22);noiseLayer(12,6,.19);noiseLayer(28,14,.14);
+    noiseLayer(65,33,.095);noiseLayer(150,75,.060);noiseLayer(350,175,.028);
+    // Giant ancient lava plains (maria) give the globe natural, recognizable structure.
+    const maria=[
+      [560,248,122,74,.19],[460,193,95,63,.17],[675,218,68,82,.16],
+      [590,348,86,39,.12],[370,298,55,41,.13],[770,317,72,45,.08],
+      [230,175,62,54,.09],[870,245,63,68,.09]
+    ];
+    for(const [cx,cy,rx,ry,d] of maria){
+      const minX=Math.max(0,Math.floor(cx-rx*2.3)),maxX=Math.min(W-1,Math.ceil(cx+rx*2.3));
+      const minY=Math.max(0,Math.floor(cy-ry*2.3)),maxY=Math.min(H-1,Math.ceil(cy+ry*2.3));
+      for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+        const v=((x-cx)/rx)**2+((y-cy)/ry)**2;
+        const m=Math.exp(-v*1.45)*d;
+        tone[y*W+x]-=m;
+        height[y*W+x]-=m*.14;
+      }
+    }
+    function crater(cx,cy,r,depth){
+      const extent=r*1.33;
+      const ymin=Math.max(0,Math.floor(cy-extent)),ymax=Math.min(H-1,Math.ceil(cy+extent));
+      for(let y=ymin;y<=ymax;y++) {
+        const dy=y-cy;
+        for(let x=Math.floor(cx-extent);x<=Math.ceil(cx+extent);x++){
+          let xp=(x%W+W)%W, dx=x-cx;
+          let ang=Math.atan2(dy,dx);
+          const warp=1.0+.032*Math.sin(ang*5+cx*.21)+.019*Math.sin(ang*9+cy*.13);
+          const t=Math.sqrt(dx*dx+dy*dy)/(r*warp);
+          if(t>1.28) continue;
+          const i=y*W+xp;
+          const bowl=t<.90 ? -depth*Math.pow(1.0-(t/.9)**2,1.55) : 0.0;
+          const rim=depth*.43*Math.exp(-(((t-1.0)/.10)**2));
+          const ejecta=t>1.0 ? depth*.06*Math.exp(-(t-1)*8)*(0.5+0.5*Math.sin(ang*24+cx)) : 0;
+          height[i]+=bowl+rim+ejecta;
+          tone[i]+=(t<.86?-depth*.085:depth*.020)*Math.exp(-Math.max(0,t-.7)*5);
+        }
+      }
+    }
+    for(let i=0;i<1650;i++){
+      const r=1.15+Math.pow(rand(),2.75)*20;
+      crater(rand()*W, 25+rand()*(H-50),r,.035+rand()*.070);
+    }
+    for(let i=0;i<42;i++){
+      const r=14+rand()*33; crater(rand()*W,30+rand()*(H-60),r,.045+rand()*.065);
+    }
+    const pixels=new Uint8Array(N*4);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const i=y*W+x;
+      const slope=height[i]-0.02;
+      const detail=(rand()-.5)*.020;
+      const raw=Math.max(.19,Math.min(.82,.51+slope*.58+tone[i]+detail));
+      pixels[i*4]  =Math.round(raw*255);
+      pixels[i*4+1]=Math.round(raw*.985*255);
+      pixels[i*4+2]=Math.round(raw*.968*255);
+      pixels[i*4+3]=Math.round(Math.max(0,Math.min(1,.50+height[i]))*255);
+    }
+    if(!gl){
+      const ctx=canvas.getContext('2d',{alpha:true});
+      const TW=1024, TH=512, tau=Math.PI*2;
+      const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let cw=0,ch=0, output, image, mapU,mapV,brightness,opacity;
+      function resize2D(){
+        const scale=Math.min(1,Math.max(.55,720/Math.max(window.innerWidth,window.innerHeight)));
+        cw=Math.round(canvas.clientWidth*scale);ch=Math.round(canvas.clientHeight*scale);
+        canvas.width=cw;canvas.height=ch;
+        image=ctx.createImageData(cw,ch);
+        output=image.data;
+        const len=cw*ch;
+        mapU=new Float32Array(len);mapV=new Int32Array(len);
+        brightness=new Float32Array(len);opacity=new Uint8Array(len);
+        const r=ch*.645, cx=cw*.5, cy=ch*.50;
+        const lx=-.5,ly=.46,lz=1.03,invL=1/Math.hypot(lx,ly,lz);
+        for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+          const i=y*cw+x, nx=(x-cx)/r,ny=(cy-y)/r, rr=nx*nx+ny*ny;
+          if(rr>=1)continue;
+          const nz=Math.sqrt(1-rr);
+          mapU[i]=((.5+(Math.atan2(nx,nz)+.35)/tau)*TW+TW)%TW;
+          mapV[i]=Math.min(TH-1,Math.max(0,Math.floor((.5-Math.asin(ny)/Math.PI)*TH)))*TW;
+          const diffuse=Math.max(0,(nx*lx+ny*ly+nz*lz)*invL);
+          brightness[i]=.19+.74*Math.pow(diffuse,.9)+.025*(ny*.5+.5);
+          opacity[i]=Math.min(255,Math.max(0,(1-Math.sqrt(rr))*r*200));
+        }
+      }
+      let lastTime=0;
+      const epoch=performance.now();
+      function draw(now){
+        if(now-lastTime<44&&!reduce){requestAnimationFrame(draw);return;}
+        lastTime=now;
+        const shift=(reduce?0:(now-epoch)/1000*.0165/tau*TW)%TW;
+        for(let i=0;i<mapU.length;i++){
+          const o=i*4, a=opacity[i];
+          if(!a){output[o+3]=0;continue;}
+          const u=(mapU[i]+shift)%TW, idx=(mapV[i]+(u|0))*4;
+          // Approximate high-frequency terrain relief from neighboring height samples.
+          const next=(mapV[i]+((u+2)|0)%TW)*4;
+          const bump=(pixels[idx+3]-pixels[next+3])*.0032;
+          const light=Math.max(.11,brightness[i]+bump);
+          output[o]  =Math.min(255,pixels[idx]*light);
+          output[o+1]=Math.min(255,pixels[idx+1]*light);
+          output[o+2]=Math.min(255,pixels[idx+2]*light*1.025);
+          output[o+3]=a;
+        }
+        ctx.putImageData(image,0,0);
+        if(!reduce)requestAnimationFrame(draw);
+      }
+      window.addEventListener('resize',resize2D,{passive:true});
+      resize2D();requestAnimationFrame(draw);
+      return;
+    }
+    const texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.uniform1i(gl.getUniformLocation(program,'uMap'),0);
+    const resolution=gl.getUniformLocation(program,'uResolution');
+    const time=gl.getUniformLocation(program,'uTime');
+    function resize(){
+      const scale=Math.min(window.devicePixelRatio||1,1.25);
+      canvas.width=Math.max(1,Math.floor(canvas.clientWidth*scale));
+      canvas.height=Math.max(1,Math.floor(canvas.clientHeight*scale));
+      gl.viewport(0,0,canvas.width,canvas.height);
+      gl.uniform2f(resolution,canvas.width,canvas.height);
+    }
+    window.addEventListener('resize',resize,{passive:true});resize();
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let start=performance.now(), last=0;
+    function frame(now){
+      // Throttled to 30fps: fluid slow rotation while conserving mobile battery.
+      if(now-last<32 && !reduced){requestAnimationFrame(frame);return;}
+      last=now;
+      gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform1f(time,reduced?0:(now-start)/1000);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+      if(!reduced)requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+  })();
+  </script>
+</body>
+</html>
